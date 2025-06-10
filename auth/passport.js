@@ -1,7 +1,7 @@
-const bcrypt = require("bcryptjs");
-LocalStrategy = require("passport-local").Strategy;
-
-const User = require("../models/User");
+const passport = require("passport");
+const LocalStrategy = require("passport-local").Strategy;
+const User = require('../models/User');
+const bcrypt = require('bcryptjs');
 
 const loginCheck = passport => {
   passport.use(
@@ -9,20 +9,20 @@ const loginCheck = passport => {
       User.findOne({ email: email })
         .then((user) => {
           if (!user) {
-            console.log("wrong email");
-            return done();
+            return done(null, false, { message: "Wrong email" });
           }
           bcrypt.compare(password, user.password, (error, isMatch) => {
-            if (error) throw error;
+            if (error) {
+              return done(error);
+            }
             if (isMatch) {
               return done(null, user);
             } else {
-              console.log("Wrong password");
-              return done();
+              return done(null, false, { message: "Wrong password" });
             }
           });
         })
-        .catch((error) => console.log(error));
+        .catch((error) => done(error));
     })
   );
 

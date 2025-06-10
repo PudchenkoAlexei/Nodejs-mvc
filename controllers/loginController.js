@@ -14,8 +14,8 @@ class RegisterUserCommand {
 
   execute() {
     if (!this.name || !this.email || !this.password || !this.confirm) {
-      console.log("Fill empty fields");
       return this.res.render("register", {
+        error: 'Please fill in all fields',
         name: this.name,
         email: this.email,
         password: this.password,
@@ -24,8 +24,8 @@ class RegisterUserCommand {
     }
 
     if (this.password !== this.confirm) {
-      console.log("Password must match");
       return this.res.render("register", {
+        error: 'Passwords must match',
         name: this.name,
         email: this.email,
         password: this.password,
@@ -35,8 +35,8 @@ class RegisterUserCommand {
 
     User.findOne({ email: this.email }).then((user) => {
       if (user) {
-        console.log("Email exists");
         return this.res.render("register", {
+          error: 'Email already exists',
           name: this.name,
           email: this.email,
           password: this.password,
@@ -44,17 +44,37 @@ class RegisterUserCommand {
         });
       }
 
-      const newUser = new User.Builder(this.name, this.email, this.password)
-        .setLocation(this.location)
-        .build();
+      const newUser = User.Director.createCustomUser(
+        this.name,
+        this.email,
+        this.password,
+        this.location,
+        new Date()
+      );
 
       bcrypt.genSalt(10, (err, salt) =>
         bcrypt.hash(newUser.password, salt, (err, hash) => {
-          if (err) throw err;
+          if (err) {
+            return this.res.render("register", {
+              error: 'Error hashing password',
+              name: this.name,
+              email: this.email,
+              password: this.password,
+              confirm: this.confirm
+            });
+          }
           newUser.password = hash;
           newUser.save()
             .then(() => this.res.redirect("/login"))
-            .catch(err => console.log(err));
+            .catch(err => {
+              return this.res.render("register", {
+                error: 'Error saving user',
+                name: this.name,
+                email: this.email,
+                password: this.password,
+                confirm: this.confirm
+              });
+            });
         })
       );
     });
@@ -71,17 +91,38 @@ class LoginUserCommand {
 
   execute() {
     if (!this.email || !this.password) {
-      console.log('Please fill in all the fields');
       return this.res.render('login', {
+        error: 'Please fill in all the fields',
         email: this.email,
         password: this.password
       });
     }
 
-    passport.authenticate('local', {
-      successRedirect: '/dashboard',
-      failureRedirect: '/login',
-      failureFlash: true
+    passport.authenticate('local', (err, user, info) => {
+      if (err) {
+        return this.res.render('login', {
+          error: 'Authentication error',
+          email: this.email,
+          password: this.password
+        });
+      }
+      if (!user) {
+        return this.res.render('login', {
+          error: info.message || 'Invalid email or password',
+          email: this.email,
+          password: this.password
+        });
+      }
+      this.req.logIn(user, (err) => {
+        if (err) {
+          return this.res.render('login', {
+            error: 'Login error',
+            email: this.email,
+            password: this.password
+          });
+        }
+        return this.res.redirect('/dashboard');
+      });
     })(this.req, this.res);
   }
 }
